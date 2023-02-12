@@ -33,12 +33,12 @@ def _minify(basedir, factors=[], resolutions=[]):
     wd = os.getcwd()
 
     for r in factors + resolutions:
-        if isinstance(r, int):
-            name = 'images_{}'.format(r)
-            resizearg = '{}%'.format(100./r)
-        else:
-            name = 'images_{}x{}'.format(r[1], r[0])
-            resizearg = '{}x{}'.format(r[1], r[0])
+        #if isinstance(r, int):
+        name = 'images_{}'.format(r)
+        resizearg = '{}%'.format(100./r)
+        #else: TODO change
+            # name = 'images_{}x{}'.format(r[1], r[0])
+            # resizearg = '{}x{}'.format(r[1], r[0])
         imgdir = os.path.join(basedir, name)
         if os.path.exists(imgdir):
             continue
@@ -452,4 +452,3 @@ def load_colmap_llff(basedir):
     return train_imgs, test_imgs, train_poses, test_poses, video_poses, depth_data, bds
 
     
-
