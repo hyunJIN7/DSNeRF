@@ -27,6 +27,10 @@ from utils.generate_renderpath import generate_renderpath
 import cv2
 # import time
 
+
+from external.pohsun_ssim import pytorch_ssim
+from models.base import *
+
 # concate_time, iter_time, split_time, loss_time, backward_time = [], [], [], [], []
 
 
@@ -658,6 +662,7 @@ def train():
         hwf = poses[0,:3,-1]
         poses = poses[:,:3,:4]
         print('Loaded llff', images.shape, render_poses.shape, hwf, args.datadir)
+
         if not isinstance(i_test, list):
             i_test = [i_test]
 
@@ -679,6 +684,9 @@ def train():
             i_train = np.array([i for i in args.train_scene if
                         (i not in i_test and i not in i_val)])
 
+        i_train = np.array([0,1,2,3,4])
+        i_test = np.array([5,6,7,8,9,10,11,12,13,14])
+        i_val = i_test
         print('DEFINING BOUNDS')
         if args.no_ndc:
             near = np.ndarray.min(bds) * .9
@@ -792,6 +800,8 @@ def train():
                 print("colmap depth:", depth_gts[index_pose]['depth'][0])
                 print("Estimated depth:", depth_maps[0].cpu().numpy())
                 print(depth_gts[index_pose]['coord'])
+
+
             else:
                 rgbs, disps = render_path(render_poses, hwf, args.chunk, render_kwargs_test, gt_imgs=images, savedir=testsavedir, render_factor=args.render_factor)
                 print('Done rendering', testsavedir)
@@ -800,7 +810,40 @@ def train():
                 print('Depth stats', np.mean(disps), np.max(disps), np.percentile(disps, 95))
                 imageio.mimwrite(os.path.join(testsavedir, 'disp.mp4'), to8b(disps / np.percentile(disps, 95)), fps=30, quality=8)
 
-            
+                print("RGBS shapeee   ", rgbs.shape)
+                #here to eval psnr lips
+                res = []
+                n = rgbs.shape[0]
+
+                h, w = 192, 256
+                #TODO : gt shape check
+                gt_imgs = images # (n,192,256,3)
+                import lpips
+                lpips_loss = lpips.LPIPS(net="alex")
+                for i in range(n):
+                    img = torch.from_numpy(rgbs[i]).float().view(-1, h, w, 3).permute(0, 3, 1, 2)  # [B,3,H,W]
+                    gt_img = torch.from_numpy(gt_imgs[i]).float().view(-1, h, w, 3).permute(0, 3, 1, 2)  # [B,3,H,W]
+
+                    psnr = -10 * MSE_loss(img, gt_img).log10().item()  # mabye rendering,true image
+                    ssim = pytorch_ssim.ssim(img, gt_img).item()
+                    lpips = lpips_loss(img * 2 - 1, gt_img * 2 - 1).item()
+                    res.append(edict(psnr=psnr, ssim=ssim, lpips=lpips))
+                    # res.append(edict(psnr=psnr, ssim=ssim))
+
+                    print("@@@@  ", i)
+                    print("PSNR:  {:8.2f}".format(psnr))
+                    print("SSIM:  {:8.2f}".format(ssim))
+                    print("LPIPS: {:8.2f}".format(lpips))
+                    print("@@@@@@@@@@@@@@@")
+
+
+
+                print("--------Other------------")
+                print("PSNR:  {:8.2f}".format(np.mean([r.psnr for r in res])))
+                print("SSIM:  {:8.2f}".format(np.mean([r.ssim for r in res])))
+                print("LPIPS: {:8.2f}".format(np.mean([r.lpips for r in res])))
+                print("--------------------------")
+
             return
 
     # Prepare raybatch tensor if batching random rays
